@@ -6,51 +6,51 @@
 <title>Solara Chat</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
-  body {
-    font-family: 'Poppins', sans-serif;
-    background: radial-gradient(circle, #1a001f, #000);
-    color: white;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    margin: 0;
-    align-items: center;
-    justify-content: center;
-  }
-  #chat {
-    width: 90%;
-    max-width: 600px;
-    height: 70vh;
-    overflow-y: auto;
-    background: rgba(0,0,0,0.6);
-    border: 1px solid purple;
-    border-radius: 10px;
-    padding: 15px;
-    box-shadow: 0 0 20px purple;
-  }
-  .msg { margin: 8px 0; }
-  .user { color: #b46aff; font-weight: bold; }
-  #inputArea { margin-top: 10px; width: 90%; max-width: 600px; display: flex; gap: 10px; }
-  input {
-    flex: 1;
-    padding: 10px;
-    border-radius: 10px;
-    border: none;
-    background: #222;
-    color: white;
-  }
-  button {
-    background: purple;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    padding: 10px 15px;
-    cursor: pointer;
-  }
-  h1 {
-    color: #c77dff;
-    text-shadow: 0 0 10px purple;
-  }
+body {
+  font-family: 'Poppins', sans-serif;
+  background: radial-gradient(circle, #1a001f, #000);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  margin: 0;
+  align-items: center;
+  justify-content: center;
+}
+#chat {
+  width: 90%;
+  max-width: 600px;
+  height: 70vh;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid purple;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 0 20px purple;
+}
+.msg { margin: 8px 0; }
+.user { color: #b46aff; font-weight: bold; }
+#inputArea { margin-top: 10px; width: 90%; max-width: 600px; display: flex; gap: 10px; }
+input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background: #222;
+  color: white;
+}
+button {
+  background: purple;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 15px;
+  cursor: pointer;
+}
+h1 {
+  color: #c77dff;
+  text-shadow: 0 0 10px purple;
+}
 </style>
 </head>
 <body>
@@ -58,45 +58,53 @@
 <div id="chat"></div>
 
 <div id="inputArea">
-  <input type="text" id="username" placeholder="Your username">
   <input type="text" id="message" placeholder="Type your message...">
   <button id="send">Send</button>
 </div>
 
 <script>
-  const socket = io();
-  const chat = document.getElementById("chat");
-  const sendBtn = document.getElementById("send");
-  const usernameInput = document.getElementById("username");
-  const messageInput = document.getElementById("message");
+const socket = io();
+const chat = document.getElementById("chat");
+const sendBtn = document.getElementById("send");
+const messageInput = document.getElementById("message");
 
-  function addMessage(msg) {
-    const div = document.createElement("div");
-    div.className = "msg";
-    div.innerHTML = `<span class="user">${msg.user}</span>: ${msg.text} <small style="color:gray;">${msg.time}</small>`;
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
-  }
+// Prompt for username once
+let username = localStorage.getItem("solara_username");
+if(!username) {
+  username = prompt("Enter your username") || "Anonymous";
+  localStorage.setItem("solara_username", username);
+}
 
-  socket.on("chatHistory", (history) => {
-    history.forEach(addMessage);
-  });
+function addMessage(msg) {
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.innerHTML = `<span class="user">${msg.user}</span>: ${msg.text} <small style="color:gray;">${msg.time}</small>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
 
-  socket.on("chatMessage", (msg) => {
-    addMessage(msg);
-  });
+// Receive previous messages
+socket.on("chatHistory", (history) => {
+  history.forEach(addMessage);
+});
 
-  function sendMessage() {
-    const user = usernameInput.value.trim() || "Anonymous";
-    const text = messageInput.value.trim();
-    if (text) {
-      socket.emit("chatMessage", { user, text });
-      messageInput.value = "";
-    }
-  }
+// Receive new messages
+socket.on("chatMessage", (msg) => {
+  addMessage(msg);
+});
 
-  sendBtn.onclick = sendMessage;
-  messageInput.addEventListener("keydown", (e) => { if(e.key === "Enter") sendMessage(); });
+function sendMessage() {
+  const text = messageInput.value.trim();
+  if(!text) return;
+  socket.emit("chatMessage", { user: username, text });
+  messageInput.value = "";
+}
+
+sendBtn.onclick = sendMessage;
+messageInput.addEventListener("keydown", (e) => {
+  if(e.key === "Enter") sendMessage();
+});
 </script>
 </body>
 </html>
+
