@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PurpleChat — Live</title>
+<link rel="icon" href="data:," />
+<style>
+  /* (Same styles as your black & purple UI — paste the CSS from the previous snippet or your site) */
+  :root{
+    --bg:#070607; --panel:#0f0e11; --muted:#bdb6d9; --accent:#8b5cf6; --accent-2:#6d28d9; --glass: rgba(255,255,255,0.03); --radius:14px; --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace; --ui-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  *{box-sizing:border-box} html,body{height:100%} body{margin:0;font-family:var(--ui-sans);background: radial-gradient(1200px 400px at 10% 10%, rgba(139,92,246,0.06), transparent 8%), radial-gradient(1000px 300px at 90% 90%, rgba(109,40,217,0.04), transparent 10%), var(--bg);color:var(--muted);padding:28px;}
+  .app { max-width:1100px; height:80vh; margin:0 auto; display:grid; grid-template-columns:260px 1fr 240px; gap:20px; align-items:stretch; }
+  .panel{ background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:var(--radius); padding:14px; box-shadow: 0 6px 20px rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.02); overflow:hidden; }
+  .brand{ display:flex; gap:10px; align-items:center; margin-bottom:10px; }
+  .logo{ width:44px; height:44px; border-radius:10px; background:linear-gradient(135deg,var(--accent), var(--accent-2)); display:grid; place-items:center; color:white; font-weight:700; font-family:var(--mono); box-shadow: 0 6px 18px rgba(109,40,217,0.18); }
+  .rooms{ margin-top:12px; display:flex; flex-direction:column; gap:8px }
+  .room{ padding:8px 10px; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:all .14s; color:var(--muted); }
+  .room:hover{transform:translateY(-2px); background:var(--glass)} .room.active{ background:linear-gradient(90deg, rgba(139,92,246,0.12), rgba(109,40,217,0.06)); color:white; font-weight:600 }
+  .dot{ min-width:10px; height:10px; border-radius:50%; background:linear-gradient(90deg,var(--accent),var(--accent-2)); box-shadow:0 6px 12px rgba(109,40,217,0.18); }
+  .chat { display:flex; flex-direction:column; height:100%; }
+  .chat-header{ display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.02); }
+  .messages { flex:1; overflow:auto; padding:18px 10px; display:flex; flex-direction:column; gap:12px; border-radius:10px; margin:12px 0; }
+  .msg { display:flex; gap:10px; align-items:flex-start; max-width:75%; } .msg.me{ margin-left:auto; flex-direction:row-reverse; text-align:right }
+  .avatar{ width:36px; height:36px; border-radius:8px; background:linear-gradient(135deg,var(--accent),var(--accent-2)); display:grid; place-items:center; color:white; font-weight:700; font-family:var(--mono) }
+  .bubble{ background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px; padding:10px 12px; font-size:14px; line-height:1.35; border:1px solid rgba(255,255,255,0.02); color:var(--muted); }
+  .msg.me .bubble{ background:linear-gradient(90deg, rgba(139,92,246,0.16), rgba(109,40,217,0.08)); color:white }
+  .meta{ font-size:11px; color:rgba(255,255,255,0.45); margin-top:6px }
+  .composer{ display:flex; gap:10px; align-items:center; padding-top:8px; }
+  .composer input{ flex:1; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:var(--muted); outline:none; font-size:14px; }
+  .btn{ background:linear-gradient(90deg,var(--accent),var(--accent-2)); border:none; padding:10px 14px; border-radius:10px; color:white; font-weight:600; cursor:pointer; box-shadow:0 8px 18px rgba(109,40,217,0.18); }
+  .users-list{ display:flex; flex-direction:column; gap:8px; margin-top:8px; overflow:auto; max-height:78vh }
+  @media (max-width:900px){ .app{ grid-template-columns:1fr; padding:12px; gap:12px; height:86vh } .panel.right{ order:3 } }
+</style>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="panel left">
+      <div class="brand">
+        <div class="logo">AI</div>
+        <div><h1>PurpleChat</h1><p style="margin:0;font-size:12px;color:rgba(255,255,255,0.6)">Live demo</p></div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="displayName" placeholder="Your name" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--muted)" />
+        <button class="btn" id="saveName">Set</button>
+      </div>
+
+      <div style="font-size:12px;color:rgba(255,255,255,0.55);margin-bottom:8px">Rooms</div>
+      <div class="rooms" id="rooms"></div>
+
+      <div style="margin-top:12px;font-size:12px;color:rgba(255,255,255,0.45)">
+        Tips: press Enter to send.
+      </div>
+    </div>
+
+    <div class="panel chat">
+      <div class="chat-header">
+        <div class="room-title">
+          <div id="roomIcon" style="width:46px;height:46;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:white;font-weight:700">R</div>
+          <div>
+            <h2 id="roomName">General</h2>
+            <p id="roomDesc">A friendly demo room</p>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn" id="clear">Clear</button>
+        </div>
+      </div>
+
+      <div class="messages" id="messages" aria-live="polite"></div>
+
+      <div class="composer">
+        <input id="messageInput" placeholder="Say something…" autocomplete="off" />
+        <button class="btn" id="sendBtn">Send</button>
+      </div>
+    </div>
+
+    <div class="panel right">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><h3 style="margin:0;color:white">Online</h3><p style="margin:0;font-size:12px;color:rgba(255,255,255,0.55)">Live users in room</p></div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.45)">●</div>
+      </div>
+      <div class="users-list" id="usersList"></div>
+    </div>
+  </div>
+
+  <!-- load socket.io client from server -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // Connect
+    const socket = io(); // connects to same origin; when deployed, this will auto-connect
+
+    // elements
+    const el = {
+      rooms: document.getElementById('rooms'),
+      messages: document.getElementById('messages'),
+      usersList: document.getElementById('usersList'),
+      roomName: document.getElementById('roomName'),
+      roomDesc: document.getElementById('roomDesc'),
+      messageInput: document.getElementById('messageInput'),
+      sendBtn: document.getElementById('sendBtn'),
+      displayName: document.getElementById('displayName'),
+      saveName: document.getElementById('saveName'),
+      clearBtn: document.getElementById('clear')
+    };
+
+    // local user
+    let myName = localStorage.getItem('purple_name') || '';
+    el.displayName.value = myName;
+    let currentRoom = 'general';
+
+    function uid(len=6){ return Math.random().toString(36).slice(2,2+len); }
+    function formatTime(ts){
+      const d = new Date(ts);
+      return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    }
+    function escapeHtml(str){
+      return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'", '&#039;');
+    }
+
+    function appendMessage(m){
+      const wrapper = document.createElement('div');
+      wrapper.className = 'msg ' + (m.userId===socket.id ? 'me':'');
+      const initials = (m.name || 'Anon').split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase();
+      wrapper.innerHTML = `
+        <div class="avatar" aria-hidden="true">${initials}</div>
+        <div style="display:flex;flex-direction:column;max-width:100%">
+          <div class="bubble">${escapeHtml(m.text)}</div>
+          <div class="meta">${escapeHtml(m.name||'Anon')} • ${formatTime(m.ts)}</div>
+        </div>
+      `;
+      el.messages.appendChild(wrapper);
+      el.messages.scrollTop = el.messages.scrollHeight;
+    }
+
+    function renderRooms(list){
+      el.rooms.innerHTML = '';
+      list.forEach(r=>{
+        const div = document.createElement('div');
+        div.className = 'room' + (r.id===currentRoom ? ' active':'');
+        div.innerHTML = `<div class="dot"></div><div style="flex:1">${r.name}<div style="font-size:12px;color:rgba(255,255,255,0.45)">${r.desc||''}</div></div>`;
+        div.onclick = ()=> {
+          currentRoom = r.id;
+          joinRoom(r.id);
+        };
+        el.rooms.appendChild(div);
+      });
+    }
+
+    // presence
+    function renderUsers(list){
+      el.usersList.innerHTML = '';
+      list.forEach(u=>{
+        const d = document.createElement('div'); d.className='user';
+        const initials = (u.name||'U').split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase();
+        d.innerHTML = `<div class="avatar" style="width:36px;height:36px;border-radius:8px">${initials}</div>
+                       <div style="display:flex;flex-direction:column">
+                         <div class="name">${escapeHtml(u.name||'Anon')}</div>
+                         <div class="status">online</div>
+                       </div>`;
+        el.usersList.appendChild(d);
+      });
+    }
+
+    // socket events
+    socket.on('connect', () => {
+      joinRoom(currentRoom);
+    });
+
+    socket.on('rooms:list', (list) => {
+      renderRooms(list);
+    });
+
+    socket.on('history', (messages) => {
+      el.messages.innerHTML = '';
+      messages.forEach(appendMessage);
+    });
+
+    socket.on('message', (m) => {
+      appendMessage(m);
+    });
+
+    socket.on('system', (evt) => {
+      // optional: show system messages briefly
+      // console.log('system', evt);
+    });
+
+    socket.on('presence', (clients) => {
+      renderUsers(clients);
+    });
+
+    // UI actions
+    function joinRoom(room) {
+      el.messages.innerHTML = '';
+      socket.emit('join', { room, name: myName || 'Anon' });
+      // update header
+      currentRoom = room;
+      const roomTitle = room.charAt(0).toUpperCase() + room.slice(1);
+      document.getElementById('roomName').textContent = roomTitle;
+      // visually set active room
+      Array.from(document.querySelectorAll('.room')).forEach(rEl => {
+        rEl.classList.toggle('active', rEl.textContent.trim().startsWith(roomTitle));
+      });
+    }
+
+    function sendMessage(){
+      const text = el.messageInput.value.trim();
+      if(!text) return;
+      socket.emit('message', { text });
+      el.messageInput.value = '';
+    }
+
+    el.sendBtn.onclick = sendMessage;
+    el.messageInput.addEventListener('keydown', (e)=> { if(e.key === 'Enter') sendMessage(); });
+
+    el.saveName.onclick = () => {
+      myName = (el.displayName.value || '').trim() || 'Anon';
+      localStorage.setItem('purple_name', myName);
+      socket.emit('join', { room: currentRoom, name: myName });
+    };
+
+    el.clearBtn.onclick = () => {
+      if (!confirm('Clear chat view? (server history will remain)')) return;
+      el.messages.innerHTML = '';
+    };
+  </script>
+</body>
+</html>
