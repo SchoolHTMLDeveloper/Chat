@@ -2,102 +2,80 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Panel</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0d0d0d;
-      color: #ddd;
-      padding: 20px;
-    }
-    h1 { color: #a64dff; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #444;
-      padding: 8px;
-      text-align: left;
-    }
-    button {
-      background: #a64dff;
-      border: none;
-      color: white;
-      padding: 5px 10px;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-    button:hover {
-      background: #b366ff;
-    }
-    .system { color: #ff6666; }
-    .unban { color: #66ff66; }
+    body { background: #0d0d0d; color: white; font-family: Arial; padding: 20px; }
+    input, button { padding: 8px; margin: 5px; border-radius: 5px; border: none; }
+    button { background: purple; color: white; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #555; padding: 8px; }
   </style>
 </head>
 <body>
   <h1>Admin Panel</h1>
 
-  <h2>Banned Users</h2>
-  <table id="bans">
-    <tr><th>Username</th><th>Reason</th><th>ID</th><th>Actions</th></tr>
-  </table>
+  <h2>Manually Ban User (Auto-Fetch Username)</h2>
+  <input id="banId" placeholder="User ID / Cookie" />
+  <input id="banReason" placeholder="Reason" />
+  <button id="banBtn">Ban</button>
 
-  <h2>Chat Log</h2>
-  <table id="chat">
-    <tr><th>Username</th><th>Message</th></tr>
+  <h2>Currently Banned Users</h2>
+  <table id="bans">
+    <tr><th>Username</th><th>Cookie/UserID</th><th>Reason</th><th>Unban</th></tr>
   </table>
 
   <script>
-    const password = prompt("Enter admin password:");
-
     async function loadBans() {
       const res = await fetch("/api/bans");
-      const bans = await res.json();
+      const data = await res.json();
       const table = document.getElementById("bans");
-      table.innerHTML = "<tr><th>Username</th><th>Reason</th><th>ID</th><th>Actions</th></tr>";
-      bans.forEach(b => {
+
+      table.innerHTML = "<tr><th>Username</th><th>Cookie/UserID</th><th>Reason</th><th>Unban</th></tr>";
+
+      data.forEach(b => {
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${b.username || "Unknown"}</td>
-          <td>${b.reason}</td>
           <td>${b.cookie}</td>
-          <td>
-            <button onclick="unban('${b.cookie}')">Unban</button>
-          </td>`;
-        table.appendChild(row);
-      });
-    }
-
-    async function unban(id) {
-      await fetch("/admin/unban", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ id, password })
-      });
-      alert("User unbanned.");
-      loadBans();
-    }
-
-    async function loadChat() {
-      const res = await fetch("/chat-history.json");
-      const chat = await res.json();
-      const table = document.getElementById("chat");
-      table.innerHTML = "<tr><th>Username</th><th>Message</th></tr>";
-      chat.forEach(m => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${m.username || "Unknown"}</td>
-          <td class="${m.system ? 'system' : ''}">${m.message}</td>
+          <td>${b.reason}</td>
+          <td><button onclick="unban('${b.cookie}')">Unban</button></td>
         `;
         table.appendChild(row);
       });
     }
 
+    document.getElementById("banBtn").onclick = async () => {
+      const id = document.getElementById("banId").value.trim();
+      const reason = document.getElementById("banReason").value.trim();
+      const password = prompt("Admin password:");
+
+      if (!id || !reason || !password) return alert("All fields required.");
+
+      const res = await fetch("/admin/ban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, reason, password })
+      });
+
+      alert(await res.text());
+      loadBans();
+    };
+
+    async function unban(id) {
+      const password = prompt("Admin password:");
+      if (!password) return;
+
+      const res = await fetch("/admin/unban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, password })
+      });
+
+      alert(await res.text());
+      loadBans();
+    }
+
     loadBans();
-    loadChat();
   </script>
 </body>
 </html>
