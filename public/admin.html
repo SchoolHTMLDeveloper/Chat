@@ -14,8 +14,7 @@
 <body>
   <h1>Admin Panel</h1>
 
-  <h2>Manually Ban User</h2>
-  <input id="banUsername" placeholder="Username (optional)" />
+  <h2>Manually Ban User (Auto-Fetch Username)</h2>
   <input id="banId" placeholder="User ID / Cookie" />
   <input id="banReason" placeholder="Reason" />
   <button id="banBtn">Ban</button>
@@ -26,7 +25,7 @@
   </table>
 
   <script>
-    // Load bans from server
+    // Load bans
     async function loadBans() {
       const res = await fetch("/api/bans");
       const data = await res.json();
@@ -48,7 +47,6 @@
 
     // Ban button
     document.getElementById("banBtn").onclick = async () => {
-      const username = document.getElementById("banUsername").value || "Unknown";
       const id = document.getElementById("banId").value.trim();
       const reason = document.getElementById("banReason").value.trim();
       const password = prompt("Admin password:");
@@ -58,7 +56,7 @@
       const res = await fetch("/admin/ban", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, username, reason, password })
+        body: JSON.stringify({ id, reason, password })
       });
 
       alert(await res.text());
@@ -80,7 +78,6 @@
       loadBans();
     }
 
-    // Initial load
     loadBans();
   </script>
 </body>
