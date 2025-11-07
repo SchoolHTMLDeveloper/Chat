@@ -14,7 +14,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD; // Set in Railway
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 // Paths
 const BANNED_WORDS_FILE = path.join(__dirname, "bannedwords.json");
@@ -73,10 +73,10 @@ io.on("connection", (socket) => {
     socket.username = username;
     socket.userId = userId;
 
-    // Send chat history
-    messages.forEach(msg => socket.emit("chat message", msg));
+    // Send only last 100 messages to avoid duplicates
+    const lastMessages = messages.slice(-100);
+    socket.emit("chat history", lastMessages);
 
-    socket.emit("userInfo", { username, userId });
     console.log(`🟢 New user connected: ${username} (${userId})`);
   });
 
@@ -84,30 +84,30 @@ io.on("connection", (socket) => {
   socket.on("chat message", (msg) => {
     if (!username || !userId) return;
 
-    const lowerMsg = msg.toLowerCase();
-
-    // Check if banned
-    if (bans.find(b => b.cookie === userId || b.username === username)) {
+    // Ignore messages from banned users
+    if (bans.find(b => b.cookie === userId)) {
       socket.emit("bannedNotice", { text: "You are banned." });
       return;
     }
 
-    // Check banned words
+    const lowerMsg = msg.toLowerCase();
+
+    // AutoMod banned words
     const foundWord = bannedWords.find(w => lowerMsg.includes(w.toLowerCase()));
     if (foundWord) {
-      const reason = `Used banned word "${foundWord}"`;
+      if (!bans.find(b => b.cookie === userId)) {
+        const reason = `Used banned word "${foundWord}"`;
 
-      bans.push({ username, cookie: userId, reason, time: Date.now() });
-      saveBans();
+        bans.push({ username, cookie: userId, reason, time: Date.now() });
+        saveBans();
 
-      const sysMsg = { username: "AutoMod", message: `${username} has been banned for ${reason}`, system: true };
-      io.emit("chat message", sysMsg);
+        const sysMsg = { username: "AutoMod", message: `${username} has been banned for ${reason}`, system: true };
+        io.emit("chat message", sysMsg);
 
-      // Save AutoMod message to chat history
-      messages.push(sysMsg);
-      messages = messages.slice(-100);
-      saveMessages();
-
+        messages.push(sysMsg);
+        messages = messages.slice(-100);
+        saveMessages();
+      }
       socket.disconnect();
       return;
     }
@@ -145,6 +145,9 @@ app.post("/admin/ban", (req, res) => {
   const { id, reason, password } = req.body;
   if (password !== ADMIN_PASSWORD) return res.status(403).send("Invalid password");
 
+  // Avoid duplicate ban
+  if (bans.find(b => b.cookie === id)) return res.send("User already banned.");
+
   // Find username from chat history
   let userNameToUse = "Unknown";
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -180,7 +183,7 @@ app.post("/admin/unban", (req, res) => {
   res.send(`User ${id} unbanned.`);
 });
 
-// Serve chat history JSON
+// Serve chat history JSON (optional, for debugging)
 app.get("/chat-history.json", (req, res) => {
   res.json(messages);
 });
