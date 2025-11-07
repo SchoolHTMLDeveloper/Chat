@@ -4,29 +4,39 @@ import { Server } from "socket.io";
 import fs from "fs";
 import cookieParser from "cookie-parser";
 import { randomUUID } from "crypto";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const ADMIN_PASSWORD = "changeme"; // 🔒 Change this password
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD; // 🔒 Set in Railway
+
+const BANNED_WORDS_FILE = path.join(__dirname, "bannedwords.json");
+const BANS_FILE = path.join(__dirname, "ban.json");
+
+// Load banned words
+let bannedWords = [];
+if (fs.existsSync(BANNED_WORDS_FILE)) {
+  bannedWords = JSON.parse(fs.readFileSync(BANNED_WORDS_FILE, "utf-8"));
+}
+
+// Load existing bans
+let bans = [];
+if (fs.existsSync(BANS_FILE)) {
+  bans = JSON.parse(fs.readFileSync(BANS_FILE, "utf-8"));
+}
+
+// Helper to save bans
+const saveBans = () => fs.writeFileSync(BANS_FILE, JSON.stringify(bans, null, 2));
 
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static("public"));
-
-const BAN_FILE = "ban.json";
-const BANNED_WORDS_FILE = "bannedwords.json";
-
-let bans = [];
-let bannedWords = [];
-
-// Load existing data
-if (fs.existsSync(BAN_FILE)) bans = JSON.parse(fs.readFileSync(BAN_FILE));
-if (fs.existsSync(BANNED_WORDS_FILE)) bannedWords = JSON.parse(fs.readFileSync(BANNED_WORDS_FILE));
-
-// Save bans to file
-const saveBans = () => fs.writeFileSync(BAN_FILE, JSON.stringify(bans, null, 2));
 
 // Middleware to block banned users
 app.use((req, res, next) => {
@@ -40,11 +50,10 @@ io.on("connection", (socket) => {
   let username;
   let userId;
 
-  // Assign persistent ID via cookies
+  // Set username and persistent ID
   socket.on("set username", (data) => {
     username = data.username || "Anonymous";
 
-    // Assign or reuse cookie ID
     if (!data.cookieId) {
       userId = randomUUID();
       socket.emit("setCookie", userId);
@@ -52,25 +61,31 @@ io.on("connection", (socket) => {
       userId = data.cookieId;
     }
 
-    socket.userId = userId;
     socket.username = username;
-
-    console.log(`🟢 ${username} connected (${userId})`);
+    socket.userId = userId;
 
     socket.emit("userInfo", { username, userId });
+    console.log(`🟢 New user connected: ${username} (${userId})`);
   });
 
+  // Handle incoming chat messages
   socket.on("chat message", (msg) => {
-    if (!username) return;
+    if (!username || !userId) return;
 
     const lowerMsg = msg.toLowerCase();
-    const foundBadWord = bannedWords.find(w => lowerMsg.includes(w));
 
-    if (foundBadWord) {
-      const reason = `Used banned word: "${foundBadWord}"`;
+    // Check if banned
+    if (bans.find(b => b.cookie === userId || b.username === username)) {
+      socket.emit("bannedNotice", { text: "You are banned." });
+      return;
+    }
 
-      // Add to ban list
-      bans.push({ username, cookie: socket.userId, reason, time: Date.now() });
+    // Check banned words
+    const foundWord = bannedWords.find(w => lowerMsg.includes(w.toLowerCase()));
+    if (foundWord) {
+      const reason = `Used banned word "${foundWord}"`;
+
+      bans.push({ username, cookie: userId, reason, time: Date.now() });
       saveBans();
 
       io.emit("chat message", {
@@ -83,6 +98,7 @@ io.on("connection", (socket) => {
       return;
     }
 
+    // Broadcast normal message
     io.emit("chat message", {
       username,
       userId,
@@ -96,15 +112,15 @@ io.on("connection", (socket) => {
 });
 
 //
-// ---------- Admin Endpoints ----------
+// ---------- Admin Routes ----------
 //
 
-// View bans
+// Serve admin page
 app.get("/admin/bans", (req, res) => {
-  res.sendFile(process.cwd() + "/public/admin.html");
+  res.sendFile(path.join(__dirname, "public/admin.html"));
 });
 
-// Return list of bans (JSON)
+// Return JSON list of bans
 app.get("/api/bans", (req, res) => {
   res.json(bans);
 });
@@ -114,7 +130,7 @@ app.post("/admin/ban", (req, res) => {
   const { id, reason, password } = req.body;
   if (password !== ADMIN_PASSWORD) return res.status(403).send("Invalid password");
 
-  bans.push({ userId: id, reason, time: Date.now(), cookie: id });
+  bans.push({ userId: id, cookie: id, reason, time: Date.now() });
   saveBans();
 
   io.emit("chat message", {
