@@ -12,7 +12,7 @@ const io = new Server(server);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123"; // change this!
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123"; // change to secure
 
 app.use(express.json());
 app.use(cookieParser());
@@ -23,13 +23,19 @@ let bans = [];
 let bannedWords = [];
 
 // --------------------
-// Safe JSON loader
+// Auto-create required JSON files if missing
+// --------------------
+const requiredFiles = ["bans.json", "bannedwords.json"];
+for (const file of requiredFiles) {
+  if (!fs.existsSync(file)) fs.writeFileSync(file, "[]");
+}
+
+// --------------------
+// Safe JSON read
 // --------------------
 function safeRead(file, fallback = []) {
   try {
-    if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, "utf-8"));
-    }
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf-8"));
   } catch (e) {
     console.error(`Error reading ${file}:`, e);
   }
@@ -88,10 +94,11 @@ io.on("connection", (socket) => {
     return;
   }
 
-  // Send last 100 messages in memory only
+  // Send last 100 messages in memory
   socket.emit("init history", messages.slice(-100));
 
   socket.on("chat message", (msg) => {
+    // Validate message
     if (!msg || typeof msg !== "object") return;
     if (!msg.message || typeof msg.message !== "string") return;
     if (!msg.username || typeof msg.username !== "string") return;
@@ -101,7 +108,7 @@ io.on("connection", (socket) => {
 
     const content = msg.message.trim().toLowerCase();
 
-    // AutoMod: banned words
+    // AutoMod banned words
     if (bannedWords.some(w => content.includes(w.toLowerCase()))) {
       bans.push({ username: msg.username, reason: "Used banned word", cookie: id });
       fs.writeFileSync("bans.json", JSON.stringify(bans, null, 2));
@@ -129,4 +136,5 @@ io.on("connection", (socket) => {
   });
 });
 
+// --------------------
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
