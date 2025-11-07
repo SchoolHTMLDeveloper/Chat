@@ -4,14 +4,105 @@
   <meta charset="UTF-8">
   <title>Chat Room</title>
   <style>
-    body { font-family: Arial; background: #0d0d0d; color: white; margin: 0; padding: 0; }
-    #chat { max-width: 800px; margin: 0 auto; padding: 20px; height: 80vh; overflow-y: scroll; border-bottom: 1px solid #555; }
-    #chat div { margin: 5px 0; }
-    #chat .system { color: red; font-weight: bold; }
-    #chat .username { font-weight: bold; cursor: pointer; color: purple; }
-    #messageForm { display: flex; max-width: 800px; margin: 0 auto; padding: 10px; }
-    #messageForm input { flex: 1; padding: 10px; border-radius: 5px; border: none; margin-right: 10px; }
-    #messageForm button { padding: 10px 20px; border: none; border-radius: 5px; background: purple; color: white; cursor: pointer; }
+    /* Reset & base */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0d0d0d; color: #fff; display: flex; flex-direction: column; height: 100vh; }
+
+    /* Chat container */
+    #chat {
+      flex: 1;
+      max-width: 800px;
+      margin: auto;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Messages */
+    #chat div {
+      max-width: 70%;
+      padding: 10px 15px;
+      border-radius: 20px;
+      word-wrap: break-word;
+      line-height: 1.4;
+    }
+
+    #chat .system {
+      background: #330000;
+      color: #ff4d4d;
+      font-weight: bold;
+      text-align: center;
+      border-radius: 10px;
+      max-width: 90%;
+      margin: 0 auto;
+    }
+
+    #chat .username {
+      font-weight: bold;
+      cursor: pointer;
+      color: #b566ff;
+      margin-right: 5px;
+    }
+
+    #chat .message {
+      background: #1a1a1a;
+      border: 1px solid #555;
+      align-self: flex-start;
+    }
+
+    /* Input bar */
+    #messageForm {
+      display: flex;
+      max-width: 800px;
+      margin: auto;
+      padding: 15px;
+      background: #111;
+      border-top: 1px solid #333;
+      gap: 10px;
+    }
+
+    #messageForm input {
+      flex: 1;
+      padding: 12px 15px;
+      border-radius: 25px;
+      border: none;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    #messageForm input::placeholder {
+      color: #888;
+    }
+
+    #messageForm button {
+      padding: 12px 25px;
+      border-radius: 25px;
+      border: none;
+      background: #b566ff;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    #messageForm button:hover {
+      background: #9b40ff;
+    }
+
+    /* Scrollbar styling */
+    #chat::-webkit-scrollbar {
+      width: 8px;
+    }
+    #chat::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 4px;
+    }
+    #chat::-webkit-scrollbar-track {
+      background: #0d0d0d;
+    }
   </style>
 </head>
 <body>
@@ -25,7 +116,6 @@
   <script>
     const socket = io();
 
-    // Persistent username and cookie
     let username = localStorage.getItem("username");
     let userId = localStorage.getItem("userid");
 
@@ -45,7 +135,6 @@
     const form = document.getElementById("messageForm");
     const input = document.getElementById("messageInput");
 
-    // Load chat history from server
     async function loadHistory() {
       const res = await fetch("/chat-history.json");
       if (!res.ok) return;
@@ -56,34 +145,27 @@
 
     loadHistory();
 
-    // Add message to chat
     function addMessage(msg) {
       const div = document.createElement("div");
       if (msg.system) {
         div.classList.add("system");
         div.textContent = msg.message;
       } else {
+        div.classList.add("message");
         const nameSpan = document.createElement("span");
         nameSpan.textContent = msg.username;
         nameSpan.classList.add("username");
         nameSpan.onclick = () => alert(`User ID: ${msg.userId}`);
         div.appendChild(nameSpan);
-
         div.appendChild(document.createTextNode(`: ${msg.message}`));
       }
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
 
-    // Handle incoming messages
     socket.on("chat message", addMessage);
+    socket.on("bannedNotice", data => alert(data.text));
 
-    // Handle banned notice
-    socket.on("bannedNotice", data => {
-      alert(data.text);
-    });
-
-    // Send message
     form.addEventListener("submit", e => {
       e.preventDefault();
       if (!input.value) return;
