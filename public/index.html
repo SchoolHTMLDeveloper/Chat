@@ -15,19 +15,17 @@
       height: 100vh;
     }
 
-    /* Chat container */
+    /* Chat container fills full width */
     #chat {
       flex: 1;
-      max-width: 900px;
-      margin: 20px auto;
+      width: 100%;
       padding: 20px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 10px;
       background: #111;
-      border-radius: 10px;
-      border: 1px solid #333;
+      border-bottom: 1px solid #333;
     }
 
     /* Individual messages */
@@ -38,6 +36,7 @@
       line-height: 1.4;
       background: #1a1a1a;
       border: 1px solid #333;
+      max-width: 60%; /* so messages don’t stretch too far */
     }
 
     #chat .system {
@@ -45,6 +44,8 @@
       color: #ff4d4d;
       font-weight: bold;
       text-align: center;
+      max-width: 90%;
+      margin: 0 auto;
     }
 
     #chat .username {
@@ -54,15 +55,13 @@
       margin-right: 5px;
     }
 
-    /* Input bar */
+    /* Input bar always full width */
     #messageForm {
       display: flex;
-      max-width: 900px;
-      margin: 0 auto 20px;
+      width: 100%;
       padding: 15px;
       background: #111;
-      border-radius: 10px;
-      border: 1px solid #333;
+      border-top: 1px solid #333;
       gap: 10px;
     }
 
