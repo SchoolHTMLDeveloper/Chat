@@ -12,7 +12,7 @@ const io = new Server(server);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123"; // change to secure pw
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123"; // change this!
 
 app.use(express.json());
 app.use(cookieParser());
@@ -23,7 +23,7 @@ let bans = [];
 let bannedWords = [];
 
 // --------------------
-// Helper functions
+// Safe JSON loader
 // --------------------
 function safeRead(file, fallback = []) {
   try {
@@ -36,30 +36,11 @@ function safeRead(file, fallback = []) {
   return fallback;
 }
 
-function save(file, data) {
-  try {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error(`Error saving ${file}:`, e);
-  }
-}
-
 // --------------------
-// Auto-create missing JSON files
+// Load bans & banned words
 // --------------------
-for (const file of ["chat-history.json", "bans.json", "bannedwords.json"]) {
-  if (!fs.existsSync(file)) fs.writeFileSync(file, "[]");
-}
-
-// --------------------
-// Load data
-// --------------------
-function loadData() {
-  messages = safeRead("chat-history.json");
-  bans = safeRead("bans.json");
-  bannedWords = safeRead("bannedwords.json");
-}
-loadData();
+bans = safeRead("bans.json");
+bannedWords = safeRead("bannedwords.json");
 
 // --------------------
 // Admin routes
@@ -76,7 +57,7 @@ app.post("/admin/unban", (req, res) => {
 
   const unbanned = bans.find(b => b.cookie === id);
   bans = bans.filter(b => b.cookie !== id);
-  save("bans.json", bans);
+  fs.writeFileSync("bans.json", JSON.stringify(bans, null, 2));
 
   const unbanMsg = {
     username: "AutoMod",
@@ -87,21 +68,15 @@ app.post("/admin/unban", (req, res) => {
 
   messages.push(unbanMsg);
   messages = messages.slice(-100);
-  save("chat-history.json", messages);
   io.emit("chat message", unbanMsg);
 
   res.send("User unbanned");
-});
-
-app.get("/chat-history.json", (req, res) => {
-  res.sendFile(path.join(__dirname, "chat-history.json"));
 });
 
 // --------------------
 // Socket.io
 // --------------------
 io.on("connection", (socket) => {
-  // Generate or read persistent ID
   const cookie = socket.handshake.headers.cookie || "";
   const idMatch = cookie.match(/uid=([^;]+)/);
   const id = idMatch ? idMatch[1] : socket.id;
@@ -113,11 +88,10 @@ io.on("connection", (socket) => {
     return;
   }
 
-  // Send last 100 messages to new user
+  // Send last 100 messages in memory only
   socket.emit("init history", messages.slice(-100));
 
   socket.on("chat message", (msg) => {
-    // Validate message object
     if (!msg || typeof msg !== "object") return;
     if (!msg.message || typeof msg.message !== "string") return;
     if (!msg.username || typeof msg.username !== "string") return;
@@ -130,7 +104,7 @@ io.on("connection", (socket) => {
     // AutoMod: banned words
     if (bannedWords.some(w => content.includes(w.toLowerCase()))) {
       bans.push({ username: msg.username, reason: "Used banned word", cookie: id });
-      save("bans.json", bans);
+      fs.writeFileSync("bans.json", JSON.stringify(bans, null, 2));
 
       socket.emit("banned", "You were banned for using a banned word.");
       socket.disconnect(true);
@@ -144,7 +118,6 @@ io.on("connection", (socket) => {
 
       messages.push(banMsg);
       messages = messages.slice(-100);
-      save("chat-history.json", messages);
       io.emit("chat message", banMsg);
       return;
     }
@@ -152,10 +125,8 @@ io.on("connection", (socket) => {
     // Normal chat
     messages.push(msg);
     messages = messages.slice(-100);
-    save("chat-history.json", messages);
     io.emit("chat message", msg);
   });
 });
 
-// --------------------
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
