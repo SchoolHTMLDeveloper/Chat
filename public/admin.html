@@ -13,20 +13,27 @@
 </head>
 <body>
   <h1>Admin Panel</h1>
+
   <h2>Manually Ban User</h2>
-  <input id="banId" placeholder="User ID" />
+  <input id="banUsername" placeholder="Username (optional)" />
+  <input id="banId" placeholder="User ID / Cookie" />
   <input id="banReason" placeholder="Reason" />
   <button id="banBtn">Ban</button>
 
   <h2>Currently Banned Users</h2>
-  <table id="bans"><tr><th>Username</th><th>Cookie/UserID</th><th>Reason</th><th>Unban</th></tr></table>
+  <table id="bans">
+    <tr><th>Username</th><th>Cookie/UserID</th><th>Reason</th><th>Unban</th></tr>
+  </table>
 
   <script>
+    // Load bans from server
     async function loadBans() {
       const res = await fetch("/api/bans");
       const data = await res.json();
       const table = document.getElementById("bans");
+
       table.innerHTML = "<tr><th>Username</th><th>Cookie/UserID</th><th>Reason</th><th>Unban</th></tr>";
+
       data.forEach(b => {
         const row = document.createElement("tr");
         row.innerHTML = `
@@ -39,33 +46,41 @@
       });
     }
 
+    // Ban button
     document.getElementById("banBtn").onclick = async () => {
+      const username = document.getElementById("banUsername").value || "Unknown";
       const id = document.getElementById("banId").value.trim();
       const reason = document.getElementById("banReason").value.trim();
       const password = prompt("Admin password:");
+
       if (!id || !reason || !password) return alert("All fields required.");
 
       const res = await fetch("/admin/ban", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, reason, password })
+        body: JSON.stringify({ id, username, reason, password })
       });
+
       alert(await res.text());
       loadBans();
     };
 
+    // Unban function
     async function unban(id) {
       const password = prompt("Admin password:");
       if (!password) return;
+
       const res = await fetch("/admin/unban", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, password })
       });
+
       alert(await res.text());
       loadBans();
     }
 
+    // Initial load
     loadBans();
   </script>
 </body>
