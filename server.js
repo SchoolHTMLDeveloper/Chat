@@ -211,12 +211,30 @@ function handleCommand(msg,socket){
       break;
     }
     case "/me": socket.emit("chat message",{username:socket.username,message:`* ${args.slice(1).join(" ")} *`,system:true}); break;
-    case "/help":{
-      const helpMsg=`User Commands:\n/online\n/report [userid] [message]\n/me [action]\n/username [newname]\n/stats\n/roll [XdY]\n/flip\n/hug [userid]\nAdmin Commands:\n/ban [userid] [reason]\n/unban [userid]\n/server [say|update|listusers|updatestatus|updateusername]\n/mute [userid] [duration]\n/kick [userid]\n/clear [userid]\n/purge\n/addbannedword [word]\n/removebannedword [word]`;
-      socket.emit("chat message",{username:"Server",message:helpMsg,system:true});
+    
+    // ✅ Fixed username command
+    case "/username": {
+      const newName = args.slice(1).join(" ");
+      if (!newName) return socket.emit("chat message", {username:"System", message:"Usage: /username newname", system:true});
+
+      const oldName = socket.username;
+      socket.username = newName;
+
+      // Update chat history for this user's messages
+      messages.forEach(m => {
+        if (m.userId === socket.userId) m.username = newName;
+      });
+      saveMessages();
+
+      // Broadcast system message
+      const sysMsg = {username:"Server", message:`${oldName} changed username to ${newName}`, system:true};
+      io.emit("chat message", sysMsg);
+      messages.push(sysMsg);
+      messages = messages.slice(-100);
+      saveMessages();
       break;
     }
-    case "/username": socket.username=args.slice(1).join(" "); break;
+
     case "/stats": socket.emit("chat message",{username:"Server",message:`Your stats:\nMessages sent: ${messages.filter(m=>m.userId===socket.userId).length}`,system:true}); break;
     case "/roll":{
       const dice=args[1]?.toLowerCase()?.split("d"); 
@@ -232,6 +250,12 @@ function handleCommand(msg,socket){
       const tUser = Array.from(io.sockets.sockets.values()).find(s=>s.userId===tId);
       if(!tUser){socket.emit("chat message",{username:"Server",message:"User not found.",system:true}); break;}
       io.emit("chat message",{username:"Server",message:`${socket.username} hugged ${tUser.username}`,system:true});
+      break;
+    }
+
+    case "/help":{
+      const helpMsg=`User Commands:\n/online\n/report [userid] [message]\n/me [action]\n/username [newname]\n/stats\n/roll [XdY]\n/flip\n/hug [userid]\nAdmin Commands:\n/ban [userid] [reason]\n/unban [userid]\n/server [say|update|listusers|updatestatus|updateusername]\n/mute [userid] [duration]\n/kick [userid]\n/clear [userid]\n/purge\n/addbannedword [word]\n/removebannedword [word]`;
+      socket.emit("chat message",{username:"Server",message:helpMsg,system:true});
       break;
     }
 
