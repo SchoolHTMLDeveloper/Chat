@@ -1,4 +1,4 @@
- cv ddeddeeeimport express from "express";
+import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import fs from "fs";
@@ -13,8 +13,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-const ADMIN_PASSWORDS = [process.env.ADMIN_PASSWORD, process.env.COADMIN].filter(Boolean);
 
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 // Paths
 const BANNED_WORDS_FILE = path.join(__dirname, "bannedwords.json");
@@ -143,7 +143,7 @@ app.get("/api/bans", (req, res) => {
 // Manual ban: only ID + reason required, username auto-fetched
 app.post("/admin/ban", (req, res) => {
   const { id, reason, password } = req.body;
-if (!ADMIN_PASSWORDS.includes(password)) return res.status(403).send("Invalid password");
+  if (password !== ADMIN_PASSWORD) return res.status(403).send("Invalid password");
 
   // Avoid duplicate ban
   if (bans.find(b => b.cookie === id)) return res.send("User already banned.");
@@ -173,8 +173,7 @@ if (!ADMIN_PASSWORDS.includes(password)) return res.status(403).send("Invalid pa
 // Unban with system message
 app.post("/admin/unban", (req, res) => {
   const { id, password } = req.body;
-if (!ADMIN_PASSWORDS.includes(password)) return res.status(403).send("Invalid password");
-
+  if (password !== ADMIN_PASSWORD) return res.status(403).send("Invalid password");
 
   const index = bans.findIndex(b => b.cookie === id || b.userId === id);
   if (index === -1) return res.send("User not found.");
