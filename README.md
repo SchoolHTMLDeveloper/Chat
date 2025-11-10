@@ -18,6 +18,7 @@
 - updates every friday
 
 # note
+-there is a chat filter you dirty people XD
 
 - we have nothing to do with brand or product that has any similarities to this platform.
   
