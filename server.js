@@ -117,7 +117,7 @@ function handleCommand(msg,socket){
   const command = args[0].toLowerCase();
 
   // Admin commands
-  const adminCommands = ["/ban","/unban","/server","/updateusername","/mute","/kick","/clear","/purge","/addbannedword","/removebannedword"];
+  const adminCommands = ["/ban","/unban","/server","/mute","/kick","/clear","/purge","/addbannedword","/removebannedword"];
   if(adminCommands.includes(command) && socket.userId!==ADMIN_ID){
     socket.emit("chat message",{username:"System",message:"❌ You are not an admin.",system:true});
     return;
@@ -166,12 +166,6 @@ function handleCommand(msg,socket){
           socket.emit("chat message",{username:"Server",message:`Online Users:\n${online.join("\n")}`,system:true});
         } break;
         case "updatestatus": io.emit("server status",args[2]||"online"); break;
-        case "updateusername":{
-          const tId=args[2]; const nName=args.slice(3).join(" ");
-          for(let s of io.sockets.sockets.values()) if(s.userId===tId) s.username=nName;
-          messages.forEach(m=>{if(m.userId===tId)m.username=nName;}); saveMessages();
-          io.emit("chat message",{username:"Server",message:`${tId} username updated to ${nName}`,system:true});
-        } break;
         default: socket.emit("chat message",{username:"Server",message:"Unknown /server command",system:true});
       }
       break;
@@ -210,22 +204,6 @@ function handleCommand(msg,socket){
       socket.emit("chat message",{username:"Server",message:`Report sent: ${rMsg}`,system:true});
       break;
     }
-    case "/me": socket.emit("chat message",{username:socket.username,message:`* ${args.slice(1).join(" ")} *`,system:true}); break;
-    
-    // ✅ Fixed username command
-    case "/username": {
-      const newName = args.slice(1).join(" ");
-      if (!newName) return socket.emit("chat message", {username:"System", message:"Usage: /username newname", system:true});
-
-      const oldName = socket.username;
-      socket.username = newName;
-
-      // Update chat history for this user's messages
-      messages.forEach(m => {
-        if (m.userId === socket.userId) m.username = newName;
-      });
-      saveMessages();
-
       // Broadcast system message
       const sysMsg = {username:"Server", message:`${oldName} changed username to ${newName}`, system:true};
       io.emit("chat message", sysMsg);
@@ -254,7 +232,7 @@ function handleCommand(msg,socket){
     }
 
     case "/help":{
-      const helpMsg=`User Commands:\n/online\n/report [userid] [message]\n/me [action]\n/username [newname]\n/stats\n/roll [XdY]\n/flip\n/hug [userid]\nAdmin Commands:\n/ban [userid] [reason]\n/unban [userid]\n/server [say|update|listusers|updatestatus|updateusername]\n/mute [userid] [duration]\n/kick [userid]\n/clear [userid]\n/purge\n/addbannedword [word]\n/removebannedword [word]`;
+      const helpMsg=`User Commands:\n/online\n/report [userid] [message]\n/stats\n/roll [XdY]\n/flip\n/hug [userid]\nAdmin Commands:\n/ban [userid] [reason]\n/unban [userid]\n/server [say|update|listusers|updatestatus]\n/mute [userid] [duration]\n/kick [userid]\n/clear [userid]\n/purge\n/addbannedword [word]\n/removebannedword [word]`;
       socket.emit("chat message",{username:"Server",message:helpMsg,system:true});
       break;
     }
