@@ -213,7 +213,7 @@ function handleCommand(msg,socket){
       break;
     }
 
-    case "/stats": socket.emit("chat message",{username:"Server",message:`Your stats:\nMessages sent: ${messages.filter(m=>m.userId===socket.userId).length}`,system:true}); break;
+    case "/stats":{ socket.emit("chat message",{username:"Server",message:`Your stats:\nMessages sent: ${messages.filter(m=>m.userId===socket.userId).length}`,system:true}); break;}
     case "/roll":{
       const dice=args[1]?.toLowerCase()?.split("d"); 
       if(!dice||dice.length!==2){socket.emit("chat message",{username:"Server",message:"Usage: /roll XdY",system:true}); break;}
