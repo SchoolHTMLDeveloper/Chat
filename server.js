@@ -497,7 +497,7 @@ Admin Commands:
       socket.emit("chat message", {
         username: "Server",
         message: helpMsg,
-        system: true,
+        system: false,
       });
       break;
     }
