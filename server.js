@@ -14,8 +14,11 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const ADMIN_ID = ["e3078d0d-aa6c-410c-8015-9a7d269fe230", "694beb8e-c652-41b0-9922-36b34f55282d"];
+// Multi-admin support
+const ADMIN_ID = [
+  "e3078d0d-aa6c-410c-8015-9a7d269fe230",
+  "694beb8e-c652-41b0-9922-36b34f55282d"
+];
 
 const BANNED_WORDS_FILE = path.join(__dirname, "bannedwords.json");
 const BANS_FILE = path.join(__dirname, "ban.json");
@@ -30,8 +33,7 @@ let bannedWords = fs.existsSync(BANNED_WORDS_FILE)
 let bans = fs.existsSync(BANS_FILE)
   ? JSON.parse(fs.readFileSync(BANS_FILE, "utf-8"))
   : [];
-const saveBans = () =>
-  fs.writeFileSync(BANS_FILE, JSON.stringify(bans, null, 2));
+const saveBans = () => fs.writeFileSync(BANS_FILE, JSON.stringify(bans, null, 2));
 
 // Load chat history
 let messages = fs.existsSync(MESSAGES_FILE)
@@ -138,7 +140,6 @@ function handleCommand(msg, socket) {
   const args = msg.trim().split(" ");
   const command = args[0].toLowerCase();
 
-  // Admin commands (protected)
   const adminCommands = [
     "/ban",
     "/unban",
@@ -151,7 +152,10 @@ function handleCommand(msg, socket) {
     "/removebannedword",
   ];
 
-  if (adminCommands.includes(command) && socket.userId !== ADMIN_ID) {
+  const isAdmin = ADMIN_ID.includes(socket.userId);
+
+  // Check if command requires admin
+  if (adminCommands.includes(command) && !isAdmin) {
     socket.emit("chat message", {
       username: "System",
       message: "❌ You are not an admin.",
@@ -235,6 +239,15 @@ function handleCommand(msg, socket) {
     }
 
     case "/server": {
+      if (!isAdmin) {
+        socket.emit("chat message", {
+          username: "System",
+          message: "❌ You are not an admin. /server commands are disabled.",
+          system: true,
+        });
+        break;
+      }
+
       const sub = args[1]?.toLowerCase();
 
       switch (sub) {
@@ -247,7 +260,7 @@ function handleCommand(msg, socket) {
           break;
 
         case "update":
-          io.emit("Server update");
+          io.emit("server update");
           break;
 
         case "listusers": {
@@ -276,6 +289,7 @@ function handleCommand(msg, socket) {
       break;
     }
 
+    // ---------- Rest of admin & user commands ----------
     case "/mute": {
       const tId = args[1];
       const dur = args[2] || "5m";
@@ -369,7 +383,8 @@ function handleCommand(msg, socket) {
       break;
 
     case "/report": {
-      const rMsg = args.slice(1).join(" ");
+      const rId = args[1];
+      const rMsg = args.slice(rId ? 2 : 1).join(" ");
       socket.emit("chat message", {
         username: "Server",
         message: `Report sent: ${rMsg}`,
@@ -455,39 +470,33 @@ function handleCommand(msg, socket) {
       break;
     }
 
-    // ---------- UPDATED /help ----------
     case "/help": {
-      const userCommands = [
-        "/online",
-        "/report [message]",
-        "/stats",
-        "/roll [XdY]",
-        "/flip",
-        "/hug [userid]",
-        "/help"
-      ];
+      let helpMsg = `User Commands:
+  /online
+  /report [userid] [message]
+  /stats
+  /roll [XdY]
+  /flip
+  /hug [userid]`;
 
-      const adminCommands = [
-        "/ban [userid] [reason]",
-        "/unban [userid]",
-        "/server [say|update|listusers|updatestatus]",
-        "/mute [userid] [duration]",
-        "/kick [userid]",
-        "/clear [userid]",
-        "/purge",
-        "/addbannedword [word]",
-        "/removebannedword [word]"
-      ];
+      if (isAdmin) {
+        helpMsg += `
 
-      const isAdmin = ADMIN_ID.includes(socket.userId);
-
-      const output = isAdmin
-        ? `Commands:\n${[...userCommands, ...adminCommands].join("\n")}`
-        : `Commands:\n${userCommands.join("\n")}`;
+Admin Commands:
+  /ban [userid] [reason]
+  /unban [userid]
+  /server [say|update|listusers|updatestatus]
+  /mute [userid] [duration]
+  /kick [userid]
+  /clear [userid]
+  /purge
+  /addbannedword [word]
+  /removebannedword [word]`;
+      }
 
       socket.emit("chat message", {
         username: "Server",
-        message: output,
+        message: helpMsg,
         system: true,
       });
       break;
