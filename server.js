@@ -138,7 +138,7 @@ function handleCommand(msg, socket) {
   const args = msg.trim().split(" ");
   const command = args[0].toLowerCase();
 
-  // Admin commands
+  // Admin commands (protected)
   const adminCommands = [
     "/ban",
     "/unban",
@@ -369,8 +369,7 @@ function handleCommand(msg, socket) {
       break;
 
     case "/report": {
-      const rId = args[1];
-      const rMsg = args.slice(rId ? 2 : 1).join(" ");
+      const rMsg = args.slice(1).join(" ");
       socket.emit("chat message", {
         username: "Server",
         message: `Report sent: ${rMsg}`,
@@ -456,29 +455,39 @@ function handleCommand(msg, socket) {
       break;
     }
 
+    // ---------- UPDATED /help ----------
     case "/help": {
-      const helpMsg = `User Commands:
-  /online
-  /report [userid] [message]
-  /stats
-  /roll [XdY]
-  /flip
-  /hug [userid]
+      const userCommands = [
+        "/online",
+        "/report [message]",
+        "/stats",
+        "/roll [XdY]",
+        "/flip",
+        "/hug [userid]",
+        "/help"
+      ];
 
-Admin Commands:
-  /ban [userid] [reason]
-  /unban [userid]
-  /server [say|update|listusers|updatestatus]
-  /mute [userid] [duration]
-  /kick [userid]
-  /clear [userid]
-  /purge
-  /addbannedword [word]
-  /removebannedword [word]`;
+      const adminCommands = [
+        "/ban [userid] [reason]",
+        "/unban [userid]",
+        "/server [say|update|listusers|updatestatus]",
+        "/mute [userid] [duration]",
+        "/kick [userid]",
+        "/clear [userid]",
+        "/purge",
+        "/addbannedword [word]",
+        "/removebannedword [word]"
+      ];
+
+      const isAdmin = socket.userId === ADMIN_ID;
+
+      const output = isAdmin
+        ? `Commands:\n${[...userCommands, ...adminCommands].join("\n")}`
+        : `Commands:\n${userCommands.join("\n")}`;
 
       socket.emit("chat message", {
         username: "Server",
-        message: helpMsg,
+        message: output,
         system: true,
       });
       break;
