@@ -18,7 +18,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 // Multiple admin IDs now supported
 const ADMIN_ID = [
   "e3078d0d-aa6c-410c-8015-9a7d269fe230",
-  "694beb8e-c652-41b0-9922-36b34f55282d"
+  "694beb8e-c652-41b0-9922-36b34f55282d",
+  "514dc434-9301-40c7-a1ef-f8aea5a9cbd6"
 ];
 
 const BANNED_WORDS_FILE = path.join(__dirname, "bannedwords.json");
