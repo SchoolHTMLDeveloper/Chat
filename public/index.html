@@ -105,10 +105,7 @@
     <button>Send</button>
   </form>
 
-  <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
-
     let username = localStorage.getItem("username");
     let userId = localStorage.getItem("userid");
 
@@ -117,19 +114,17 @@
       localStorage.setItem("username", username);
     }
 
-    socket.emit("set username", { username, cookieId: userId });
-
-    socket.on("setCookie", id => {
-      userId = id;
-      localStorage.setItem("userid", id);
-    });
+    if (!userId) {
+      userId = crypto.randomUUID();
+      localStorage.setItem("userid", userId);
+    }
 
     const chat = document.getElementById("chat");
     const form = document.getElementById("messageForm");
     const input = document.getElementById("messageInput");
 
     async function loadHistory() {
-      const res = await fetch("/chat-history.json");
+      const res = await fetch("/api/messages");
       if (!res.ok) return;
       const messages = await res.json();
       messages.forEach(addMessage);
@@ -162,17 +157,45 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
-    socket.on("chat message", addMessage);
-    socket.on("bannedNotice", data => alert(data.text));
+    async function sendMessage(message) {
+      try {
+        const res = await fetch("/api/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-ID": userId
+          },
+          body: JSON.stringify({ username, userId, message })
+        });
+        
+        const data = await res.json();
+        
+        if (data.banned) {
+          alert("You have been banned from the chat.");
+          return;
+        }
+        
+        if (res.ok) {
+          addMessage(data);
+        } else {
+          alert(data.error || "Failed to send message");
+        }
+      } catch (err) {
+        console.error("Error sending message:", err);
+        alert("Failed to send message");
+      }
+    }
 
-    form.addEventListener("submit", e => {
+    form.addEventListener("submit", async e => {
       e.preventDefault();
       if (!input.value) return;
-      socket.emit("chat message", input.value);
+      await sendMessage(input.value);
       input.value = "";
+      setTimeout(loadHistory, 1000);
     });
 
-    // Request notification permission
+    setInterval(loadHistory, 3000);
+
     if (Notification.permission === "default") Notification.requestPermission();
   </script>
 </body>

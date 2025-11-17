@@ -4,11 +4,17 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "netlify dev"
   },
   "dependencies": {
+    "@netlify/blobs": "^8.1.0",
+    "@netlify/functions": "^2.8.2",
     "express": "^4.18.2",
     "socket.io": "^4.7.2",
     "cookie-parser": "^1.4.7"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.37.1"
   }
 }
