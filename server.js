@@ -14,51 +14,45 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// -------- ADMIN SETTINGS --------
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+// Allow multiple admin IDs
 const ADMIN_ID = [
   "e3078d0d-aa6c-410c-8015-9a7d269fe230",
-  "694beb8e-c652-41b0-9922-36b34f55282d"
+  "694beb8e-c652-41b0-9922-36b34f55282d",
 ];
 
-// -------- FILE LOCATIONS --------
 const BANNED_WORDS_FILE = path.join(__dirname, "bannedwords.json");
 const BANS_FILE = path.join(__dirname, "ban.json");
 const MESSAGES_FILE = path.join(__dirname, "chat-history.json");
 
-// -------- LOAD FILES --------
+// Load banned words
 let bannedWords = fs.existsSync(BANNED_WORDS_FILE)
   ? JSON.parse(fs.readFileSync(BANNED_WORDS_FILE, "utf-8"))
   : [];
 
+// Load bans
 let bans = fs.existsSync(BANS_FILE)
   ? JSON.parse(fs.readFileSync(BANS_FILE, "utf-8"))
   : [];
 const saveBans = () =>
   fs.writeFileSync(BANS_FILE, JSON.stringify(bans, null, 2));
 
+// Load chat history
 let messages = fs.existsSync(MESSAGES_FILE)
   ? JSON.parse(fs.readFileSync(MESSAGES_FILE, "utf-8"))
   : [];
 const saveMessages = () =>
   fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
 
-// -------- MUTE SYSTEM --------
-let mutedUsers = {}; // { userId: expiresTimestamp }
+// Track muted users
+let mutedUsers = {}; // { userId: unmuteTimestamp }
 
-// auto-clean expired mutes every 60 seconds
-setInterval(() => {
-  const now = Date.now();
-  for (const uid in mutedUsers) {
-    if (mutedUsers[uid] <= now) delete mutedUsers[uid];
-  }
-}, 60000);
-
-// -------- MIDDLEWARE --------
+// Middleware
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static("public"));
 
-// block banned users
+// Block banned users
 app.use((req, res, next) => {
   const cookieId = req.cookies?.userid;
   if (bans.find((b) => b.cookie === cookieId))
@@ -66,7 +60,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// -------- SOCKET.IO --------
+// Socket.io
 io.on("connection", (socket) => {
   let username;
   let userId;
@@ -82,36 +76,43 @@ io.on("connection", (socket) => {
     socket.username = username;
     socket.userId = userId;
 
+    // Send last 100 messages
     socket.emit("chat history", messages.slice(-100));
+
     console.log(`🟢 New user connected: ${username} (${userId})`);
   });
 
   socket.on("chat message", (msg) => {
     if (!username || !userId) return;
 
-    // banned user check
+    // Auto-unmute cleanup
+    const now = Date.now();
+    for (const [uid, time] of Object.entries(mutedUsers)) {
+      if (time <= now) delete mutedUsers[uid];
+    }
+
     if (bans.find((b) => b.cookie === userId)) {
       socket.emit("bannedNotice", { text: "You are banned." });
       return;
     }
 
-    // muted check
-    if (mutedUsers[userId] && Date.now() < mutedUsers[userId]) {
+    if (mutedUsers[userId]) {
       socket.emit("chat message", {
         username: "System",
-        message: "❌ You are muted.",
+        message: `You are muted for ${Math.ceil(
+          (mutedUsers[userId] - now) / 1000
+        )}s`,
         system: true,
       });
       return;
     }
 
-    // commands
     if (msg.startsWith("/")) {
       handleCommand(msg, socket);
       return;
     }
 
-    // banned words filter
+    // AutoMod banned words
     const lowerMsg = msg.toLowerCase();
     const foundWord = bannedWords.find((w) =>
       lowerMsg.includes(w.toLowerCase())
@@ -119,7 +120,6 @@ io.on("connection", (socket) => {
     if (foundWord) {
       if (!bans.find((b) => b.cookie === userId)) {
         const reason = `Used banned word "${foundWord}"`;
-
         bans.push({
           username,
           cookie: userId,
@@ -133,8 +133,8 @@ io.on("connection", (socket) => {
           message: `${username} has been banned for ${reason}`,
           system: true,
         };
-
         io.emit("chat message", sysMsg);
+
         messages.push(sysMsg);
         messages = messages.slice(-100);
         saveMessages();
@@ -143,7 +143,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // normal message
+    // Normal message
     const msgData = { username, userId, message: msg };
     messages.push(msgData);
     messages = messages.slice(-100);
@@ -151,10 +151,9 @@ io.on("connection", (socket) => {
 
     io.emit("chat message", msgData);
 
-    // ----- MENTION NOTIFICATIONS -----
-    for (let s of io.sockets.sockets.values()) {
-      const tag = "@" + s.username.toLowerCase();
-      if (msg.toLowerCase().includes(tag)) {
+    // Mentions
+    for (const s of io.sockets.sockets.values()) {
+      if (msg.includes(`@${s.username}`) && s.userId !== userId) {
         s.emit("mention", {
           from: username,
           message: msg,
@@ -168,12 +167,13 @@ io.on("connection", (socket) => {
   );
 });
 
-// -------- COMMAND HANDLER --------
+// ---------------- Command handler ----------------
 function handleCommand(msg, socket) {
   const args = msg.trim().split(" ");
   const command = args[0].toLowerCase();
 
-  const adminOnly = [
+  // Admin commands
+  const adminCommands = [
     "/ban",
     "/unban",
     "/server",
@@ -187,7 +187,7 @@ function handleCommand(msg, socket) {
 
   const isAdmin = ADMIN_ID.includes(socket.userId);
 
-  if (adminOnly.includes(command) && !isAdmin) {
+  if (adminCommands.includes(command) && !isAdmin) {
     socket.emit("chat message", {
       username: "System",
       message: "❌ You are not an admin.",
@@ -197,12 +197,10 @@ function handleCommand(msg, socket) {
   }
 
   switch (command) {
-    // ---------------- ADMIN ----------------
-
+    // ---------- Admin ----------
     case "/ban": {
       const banId = args[1];
       const reason = args.slice(2).join(" ") || "No reason provided";
-
       if (!banId)
         return socket.emit("chat message", {
           username: "System",
@@ -226,11 +224,16 @@ function handleCommand(msg, socket) {
         });
         saveBans();
 
-        io.emit("chat message", {
+        const sysMsg = {
           username: "AutoMod",
           message: `${uname} has been manually banned for ${reason}`,
           system: true,
-        });
+        };
+        io.emit("chat message", sysMsg);
+
+        messages.push(sysMsg);
+        messages = messages.slice(-100);
+        saveMessages();
       }
       break;
     }
@@ -244,25 +247,29 @@ function handleCommand(msg, socket) {
           system: true,
         });
 
-      const index = bans.findIndex((b) => b.cookie === unbanId);
+      const index = bans.findIndex(
+        (b) => b.cookie === unbanId || b.userId === unbanId
+      );
       if (index !== -1) {
         const u = bans[index];
         bans.splice(index, 1);
         saveBans();
 
-        io.emit("chat message", {
+        const sysMsg = {
           username: "AutoMod",
           message: `${u.username || "Unknown"} has been unbanned.`,
           system: true,
-        });
+        };
+        io.emit("chat message", sysMsg);
+        messages.push(sysMsg);
+        messages = messages.slice(-100);
+        saveMessages();
       }
       break;
     }
 
-    // --- server admin commands ---
     case "/server": {
       const sub = args[1]?.toLowerCase();
-
       switch (sub) {
         case "say":
           io.emit("chat message", {
@@ -271,7 +278,9 @@ function handleCommand(msg, socket) {
             system: true,
           });
           break;
-
+        case "update":
+          io.emit("server update");
+          break;
         case "listusers": {
           const online = Array.from(io.sockets.sockets.values()).map(
             (s) => `${s.username} (${s.userId})`
@@ -283,11 +292,9 @@ function handleCommand(msg, socket) {
           });
           break;
         }
-
-        case "update":
-          io.emit("Server update");
+        case "updatestatus":
+          io.emit("server status", args[2] || "online");
           break;
-
         default:
           socket.emit("chat message", {
             username: "Server",
@@ -300,8 +307,7 @@ function handleCommand(msg, socket) {
 
     case "/mute": {
       const tId = args[1];
-      const duration = parseDuration(args[2] || "5m");
-
+      const dur = args[2] || "5m";
       if (!tId)
         return socket.emit("chat message", {
           username: "System",
@@ -309,11 +315,12 @@ function handleCommand(msg, socket) {
           system: true,
         });
 
-      mutedUsers[tId] = Date.now() + duration;
+      const durMs = parseDuration(dur);
+      mutedUsers[tId] = Date.now() + durMs;
 
       io.emit("chat message", {
         username: "AutoMod",
-        message: `User ${tId} has been muted.`,
+        message: `User ${tId} has been muted for ${dur}`,
         system: true,
       });
       break;
@@ -328,9 +335,7 @@ function handleCommand(msg, socket) {
           system: true,
         });
 
-      for (let s of io.sockets.sockets.values())
-        if (s.userId === tId) s.disconnect();
-
+      for (let s of io.sockets.sockets.values()) if (s.userId === tId) s.disconnect();
       io.emit("chat message", {
         username: "AutoMod",
         message: `User ${tId} was kicked.`,
@@ -350,7 +355,6 @@ function handleCommand(msg, socket) {
 
       messages = messages.filter((m) => m.userId !== tId);
       saveMessages();
-
       io.emit("chat message", {
         username: "Server",
         message: `All messages from ${tId} cleared`,
@@ -371,22 +375,15 @@ function handleCommand(msg, socket) {
 
     case "/addbannedword":
       bannedWords.push(args[1]);
-      fs.writeFileSync(
-        BANNED_WORDS_FILE,
-        JSON.stringify(bannedWords, null, 2)
-      );
+      fs.writeFileSync(BANNED_WORDS_FILE, JSON.stringify(bannedWords, null, 2));
       break;
 
     case "/removebannedword":
       bannedWords = bannedWords.filter((w) => w !== args[1]);
-      fs.writeFileSync(
-        BANNED_WORDS_FILE,
-        JSON.stringify(bannedWords, null, 2)
-      );
+      fs.writeFileSync(BANNED_WORDS_FILE, JSON.stringify(bannedWords, null, 2));
       break;
 
-    // ---------------- USER COMMANDS ----------------
-
+    // ---------- User ----------
     case "/online":
       socket.emit("chat message", {
         username: "Server",
@@ -396,7 +393,8 @@ function handleCommand(msg, socket) {
       break;
 
     case "/report": {
-      const rMsg = args.slice(1).join(" ");
+      const rId = args[1];
+      const rMsg = args.slice(rId ? 2 : 1).join(" ");
       socket.emit("chat message", {
         username: "Server",
         message: `Report sent: ${rMsg}`,
@@ -416,19 +414,19 @@ function handleCommand(msg, socket) {
       break;
 
     case "/roll": {
-      const dice = args[1]?.split("d");
-      if (!dice || dice.length !== 2)
-        return socket.emit("chat message", {
+      const dice = args[1]?.toLowerCase()?.split("d");
+      if (!dice || dice.length !== 2) {
+        socket.emit("chat message", {
           username: "Server",
           message: "Usage: /roll XdY",
           system: true,
         });
-
+        break;
+      }
       const [num, faces] = dice.map(Number);
       const results = [];
       for (let i = 0; i < num; i++)
         results.push(1 + Math.floor(Math.random() * faces));
-
       socket.emit("chat message", {
         username: "Server",
         message: `${socket.username} rolled: ${results.join(", ")}`,
@@ -449,23 +447,26 @@ function handleCommand(msg, socket) {
 
     case "/hug": {
       const tId = args[1];
-      if (!tId)
-        return socket.emit("chat message", {
+      if (!tId) {
+        socket.emit("chat message", {
           username: "Server",
-          message: "Usage: /hug userid",
+          message: "Usage: /hug [userid]",
           system: true,
         });
+        break;
+      }
 
       const tUser = Array.from(io.sockets.sockets.values()).find(
         (s) => s.userId === tId
       );
-
-      if (!tUser)
-        return socket.emit("chat message", {
+      if (!tUser) {
+        socket.emit("chat message", {
           username: "Server",
           message: "User not found.",
           system: true,
         });
+        break;
+      }
 
       io.emit("chat message", {
         username: "Server",
@@ -476,30 +477,31 @@ function handleCommand(msg, socket) {
     }
 
     case "/help": {
-      const userHelp = `Commands:
+      let helpMsg = `User Commands:
   /online
-  /report [message]
+  /report [userid] [message]
   /stats
-  /roll XdY
+  /roll [XdY]
   /flip
-  /hug [userid]
-  @username to mention`;
+  /hug [userid]`;
 
-      const adminHelp = `
+      if (isAdmin) {
+        helpMsg += `
 Admin Commands:
   /ban [userid] [reason]
   /unban [userid]
-  /server [say|listusers|update]
+  /server [say|update|listusers|updatestatus]
   /mute [userid] [duration]
   /kick [userid]
   /clear [userid]
   /purge
   /addbannedword [word]
   /removebannedword [word]`;
+      }
 
       socket.emit("chat message", {
         username: "Server",
-        message: isAdmin ? userHelp + "\n\n" + adminHelp : userHelp,
+        message: helpMsg,
         system: true,
       });
       break;
@@ -514,15 +516,21 @@ Admin Commands:
   }
 }
 
-// parse duration like "5m" or "10s"
+// Helpers
 function parseDuration(str) {
-  if (str.endsWith("s")) return parseInt(str) * 1000;
-  if (str.endsWith("m")) return parseInt(str) * 60000;
-  if (str.endsWith("h")) return parseInt(str) * 3600000;
-  return 300000; // default 5m
+  const match = str.match(/^(\d+)(s|m|h)$/);
+  if (!match) return 300000; // default 5 minutes
+  const [, val, unit] = match;
+  const num = parseInt(val);
+  switch (unit) {
+    case "s": return num * 1000;
+    case "m": return num * 60 * 1000;
+    case "h": return num * 60 * 60 * 1000;
+    default: return 300000;
+  }
 }
 
-// -------- OPTIONAL ENDPOINTS --------
+// Optional endpoints
 app.get("/chat-history.json", (req, res) => res.json(messages));
 app.get("/admin", (req, res) =>
   res.sendFile(path.join(__dirname, "public/admin.html"))
