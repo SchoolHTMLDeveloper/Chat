@@ -129,7 +129,7 @@
       if (!res.ok) return;
       const messages = await res.json();
       messages.forEach(msg => {
-        const msgId = `${msg.userId}-${msg.timestamp || msg.message}`;
+        const msgId = msg.timestamp ? `${msg.userId}-${msg.timestamp}` : `${msg.userId}-${msg.message}`;
         if (!displayedMessages.has(msgId)) {
           displayedMessages.add(msgId);
           addMessage(msg);
@@ -183,7 +183,7 @@
         }
         
         if (res.ok) {
-          const msgId = `${data.userId}-${data.timestamp || data.message}`;
+          const msgId = data.timestamp ? `${data.userId}-${data.timestamp}` : `${data.userId}-${data.message}`;
           if (!displayedMessages.has(msgId)) {
             displayedMessages.add(msgId);
             addMessage(data);
