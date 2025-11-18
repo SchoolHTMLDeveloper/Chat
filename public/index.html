@@ -105,7 +105,10 @@
     <button>Send</button>
   </form>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script>
+    const socket = io();
+
     let username = localStorage.getItem("username");
     let userId = localStorage.getItem("userid");
 
@@ -114,27 +117,22 @@
       localStorage.setItem("username", username);
     }
 
-    if (!userId) {
-      userId = crypto.randomUUID();
-      localStorage.setItem("userid", userId);
-    }
+    socket.emit("set username", { username, cookieId: userId });
+
+    socket.on("setCookie", id => {
+      userId = id;
+      localStorage.setItem("userid", id);
+    });
 
     const chat = document.getElementById("chat");
     const form = document.getElementById("messageForm");
     const input = document.getElementById("messageInput");
-    const displayedMessages = new Set();
 
     async function loadHistory() {
-      const res = await fetch("/api/messages");
+      const res = await fetch("/chat-history.json");
       if (!res.ok) return;
       const messages = await res.json();
-      messages.forEach(msg => {
-        const msgId = msg.timestamp ? `${msg.userId}-${msg.timestamp}` : `${msg.userId}-${msg.message}`;
-        if (!displayedMessages.has(msgId)) {
-          displayedMessages.add(msgId);
-          addMessage(msg);
-        }
-      });
+      messages.forEach(addMessage);
       chat.scrollTop = chat.scrollHeight;
     }
 
@@ -164,48 +162,17 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
-    async function sendMessage(message) {
-      try {
-        const res = await fetch("/api/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-User-ID": userId
-          },
-          body: JSON.stringify({ username, userId, message })
-        });
-        
-        const data = await res.json();
-        
-        if (data.banned) {
-          alert("You have been banned from the chat.");
-          return;
-        }
-        
-        if (res.ok) {
-          const msgId = data.timestamp ? `${data.userId}-${data.timestamp}` : `${data.userId}-${data.message}`;
-          if (!displayedMessages.has(msgId)) {
-            displayedMessages.add(msgId);
-            addMessage(data);
-          }
-        } else {
-          alert(data.error || "Failed to send message");
-        }
-      } catch (err) {
-        console.error("Error sending message:", err);
-        alert("Failed to send message");
-      }
-    }
+    socket.on("chat message", addMessage);
+    socket.on("bannedNotice", data => alert(data.text));
 
-    form.addEventListener("submit", async e => {
+    form.addEventListener("submit", e => {
       e.preventDefault();
       if (!input.value) return;
-      await sendMessage(input.value);
+      socket.emit("chat message", input.value);
       input.value = "";
     });
 
-    setInterval(loadHistory, 3000);
-
+    // Request notification permission
     if (Notification.permission === "default") Notification.requestPermission();
   </script>
 </body>
