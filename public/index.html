@@ -1,76 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Chat Room</title>
-<style>
-/* Your CSS here (keep your current styles) */
-</style>
+  <meta charset="UTF-8">
+  <title>Chat Room</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0d0d0d;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #chat {
+      flex: 1;
+      width: 100%;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #111;
+      border-bottom: 1px solid #333;
+    }
+
+    #chat div {
+      padding: 10px 15px;
+      border-radius: 10px;
+      word-wrap: break-word;
+      line-height: 1.4;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      max-width: 60%;
+    }
+
+    #chat .system {
+      background: #330000;
+      color: #ff4d4d;
+      font-weight: bold;
+      text-align: center;
+      max-width: 90%;
+      margin: 0 auto;
+    }
+
+    #chat .username {
+      font-weight: bold;
+      color: #b566ff;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+
+    #chat .mention {
+      background: #333300;
+      color: #ffff00;
+      font-weight: bold;
+    }
+
+    #messageForm {
+      display: flex;
+      width: 100%;
+      padding: 15px;
+      background: #111;
+      border-top: 1px solid #333;
+      gap: 10px;
+    }
+
+    #messageForm input {
+      flex: 1;
+      padding: 12px 15px;
+      border-radius: 25px;
+      border: none;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    #messageForm input::placeholder { color: #888; }
+
+    #messageForm button {
+      padding: 12px 25px;
+      border-radius: 25px;
+      border: none;
+      background: #b566ff;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    #messageForm button:hover { background: #9b40ff; }
+
+    #chat::-webkit-scrollbar { width: 10px; }
+    #chat::-webkit-scrollbar-thumb { background: #555; border-radius: 5px; }
+    #chat::-webkit-scrollbar-track { background: #0d0d0d; }
+  </style>
 </head>
 <body>
-<div id="chat"></div>
-<form id="messageForm">
-  <input id="messageInput" autocomplete="off" placeholder="Type a message..." />
-  <button>Send</button>
-</form>
+  <div id="chat"></div>
+  <form id="messageForm">
+    <input id="messageInput" autocomplete="off" placeholder="Type a message..." />
+    <button>Send</button>
+  </form>
 
-<script src="/socket.io/socket.io.js"></script>
-<script>
-const socket = io();
-let username = localStorage.getItem("username");
-let userId = localStorage.getItem("userid");
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
 
-if(!username) {
-  username = prompt("Enter your username:") || "Anonymous";
-  localStorage.setItem("username",username);
-}
+    let username = localStorage.getItem("username");
+    let userId = localStorage.getItem("userid");
 
-socket.emit("set username",{username,cookieId:userId});
+    if (!username) {
+      username = prompt("Enter your username:") || "Anonymous";
+      localStorage.setItem("username", username);
+    }
 
-socket.on("setCookie",id=>{
-  userId=id;
-  localStorage.setItem("userid",id);
-});
+    socket.emit("set username", { username, cookieId: userId });
 
-const chat=document.getElementById("chat");
-const form=document.getElementById("messageForm");
-const input=document.getElementById("messageInput");
+    socket.on("setCookie", id => {
+      userId = id;
+      localStorage.setItem("userid", id);
+    });
 
-socket.on("chat history",msgs=>msgs.forEach(addMessage));
-socket.on("chat message",addMessage);
-socket.on("bannedNotice",data=>alert(data.text));
-socket.on("mention",data=>{
-  if(Notification.permission==="granted")
-    new Notification(`${data.from} mentioned you!`,{body:data.message});
-});
+    const chat = document.getElementById("chat");
+    const form = document.getElementById("messageForm");
+    const input = document.getElementById("messageInput");
 
-function addMessage(msg){
-  const div=document.createElement("div");
-  if(msg.system){ div.classList.add("system"); div.textContent=msg.message; }
-  else {
-    const mention=msg.message.includes(`@${username}`);
-    if(mention) div.classList.add("mention");
+    // Load chat history
+    socket.on("chat history", msgs => msgs.forEach(addMessage));
+    socket.on("chat message", addMessage);
+    socket.on("bannedNotice", data => alert(data.text));
 
-    const nameSpan=document.createElement("span");
-    nameSpan.textContent=msg.username;
-    nameSpan.classList.add("username");
-    nameSpan.onclick=()=>alert(`User ID: ${msg.userId}`);
-    div.appendChild(nameSpan);
-    div.appendChild(document.createTextNode(`: ${msg.message}`));
-  }
-  chat.appendChild(div);
-  chat.scrollTop=chat.scrollHeight;
-}
+    // Mention notifications
+    socket.on("mention", data => {
+      if (Notification.permission === "granted") {
+        new Notification(`${data.from} mentioned you!`, { body: data.message });
+      }
+    });
 
-form.addEventListener("submit",e=>{
-  e.preventDefault();
-  if(!input.value) return;
-  socket.emit("chat message",input.value);
-  input.value="";
-});
+    function addMessage(msg) {
+      const div = document.createElement("div");
 
-// Notifications
-if(Notification.permission==="default") Notification.requestPermission();
-</script>
+      if (msg.system) {
+        div.classList.add("system");
+        div.textContent = msg.message;
+      } else {
+        const mention = msg.message.includes(`@${username}`);
+        if (mention) div.classList.add("mention");
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = msg.username;
+        nameSpan.classList.add("username");
+        nameSpan.onclick = () => alert(`User ID: ${msg.userId}`);
+        div.appendChild(nameSpan);
+        div.appendChild(document.createTextNode(`: ${msg.message}`));
+      }
+
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      if (!input.value) return;
+      socket.emit("chat message", input.value);
+      input.value = "";
+    });
+
+    // Request notification permission
+    if (Notification.permission === "default") Notification.requestPermission();
+  </script>
 </body>
 </html>
