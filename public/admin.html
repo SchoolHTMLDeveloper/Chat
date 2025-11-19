@@ -4,27 +4,78 @@
   <meta charset="UTF-8">
   <title>Admin Panel</title>
   <style>
-    body { font-family: 'Segoe UI', sans-serif; background: #0d0d0d; color: #fff; padding: 20px; }
-    h1 { color: #b566ff; }
+    body { background: #0d0d0d; color: white; font-family: Arial; padding: 20px; }
     input, button { padding: 8px; margin: 5px; border-radius: 5px; border: none; }
-    button { background: #b566ff; color: #fff; cursor: pointer; }
-    button:hover { background: #9b40ff; }
-    ul { list-style-type: none; }
+    button { background: purple; color: white; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #555; padding: 8px; }
   </style>
 </head>
 <body>
   <h1>Admin Panel</h1>
-  <p>Use commands in the chat for admin controls:</p>
-  <ul>
-    <li>/ban [userid] [reason]</li>
-    <li>/unban [userid]</li>
-    <li>/mute [userid] [duration]</li>
-    <li>/kick [userid]</li>
-    <li>/clear [userid]</li>
-    <li>/purge</li>
-    <li>/addbannedword [word]</li>
-    <li>/removebannedword [word]</li>
-    <li>/server [say|update|listusers|updatestatus]</li>
-  </ul>
+
+  <h2>Manually Ban User (Auto-Fetch Username)</h2>
+  <input id="banId" placeholder="User ID / Cookie" />
+  <input id="banReason" placeholder="Reason" />
+  <button id="banBtn">Ban</button>
+
+  <h2>Currently Banned Users</h2>
+  <table id="bans">
+    <tr><th>Username</th><th>Cookie/UserID</th><th>Reason</th><th>Unban</th></tr>
+  </table>
+
+  <script>
+    async function loadBans() {
+      const res = await fetch("/api/bans");
+      const data = await res.json();
+      const table = document.getElementById("bans");
+
+      table.innerHTML = "<tr><th>Username</th><th>Cookie/UserID</th><th>Reason</th><th>Unban</th></tr>";
+
+      data.forEach(b => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${b.username || "Unknown"}</td>
+          <td>${b.cookie}</td>
+          <td>${b.reason}</td>
+          <td><button onclick="unban('${b.cookie}')">Unban</button></td>
+        `;
+        table.appendChild(row);
+      });
+    }
+
+    document.getElementById("banBtn").onclick = async () => {
+      const id = document.getElementById("banId").value.trim();
+      const reason = document.getElementById("banReason").value.trim();
+      const password = prompt("Admin password:");
+
+      if (!id || !reason || !password) return alert("All fields required.");
+
+      const res = await fetch("/admin/ban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, reason, password })
+      });
+
+      alert(await res.text());
+      loadBans();
+    };
+
+    async function unban(id) {
+      const password = prompt("Admin password:");
+      if (!password) return;
+
+      const res = await fetch("/admin/unban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, password })
+      });
+
+      alert(await res.text());
+      loadBans();
+    }
+
+    loadBans();
+  </script>
 </body>
 </html>
