@@ -109,6 +109,13 @@
   <script>
     const socket = io();
 
+    let params = new URLSearchParams(window.location.search);
+let ignore = params.has("_sm_au_"); // just detect the weird param
+if (ignore) {
+  history.replaceState(null, "", window.location.pathname); // removes query string
+}
+
+
     let username = localStorage.getItem("username");
     let userId = localStorage.getItem("userid");
 
