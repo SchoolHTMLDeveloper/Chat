@@ -14,7 +14,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const ADMIN_PASSWORD = "AdminPassword123123"; // change to process.env.password or your own password (only if you idiots dont know how to set .env)
 // Multiple admin IDs now supported
 const ADMIN_ID = [
   "e3078d0d-aa6c-410c-8015-9a7d269fe230",
