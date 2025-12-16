@@ -533,6 +533,9 @@ Admin Commands:
 
 // Optional endpoints
 app.get("/chat-history.json", (req, res) => res.json(messages));
+app.get("/", (req, res) =>
+  res.sendFile(path.join(__dirname, "public/index.html"))
+);
 app.get("/admin", (req, res) =>
   res.sendFile(path.join(__dirname, "public/admin.html"))
 );
