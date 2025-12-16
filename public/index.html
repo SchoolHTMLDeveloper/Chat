@@ -1,150 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chat Room</title>
-<style>
-  body {
-    margin: 0;
-    padding: 0;
-    background-color: #0d0d0d;
-    color: white;
-    font-family: Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
+  <meta charset="UTF-8">
+  <title>Chat Room</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  #chat-container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-  }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0d0d0d;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
 
-  .message {
-    margin-bottom: 8px;
-    word-wrap: break-word;
-  }
+    #chat {
+      flex: 1;
+      width: 100%;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #111;
+      border-bottom: 1px solid #333;
+    }
 
-  .message .username {
-    font-weight: bold;
-    color: #bb86fc;
-    cursor: pointer;
-  }
+    #chat div {
+      padding: 10px 15px;
+      border-radius: 10px;
+      word-wrap: break-word;
+      line-height: 1.4;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      max-width: 60%;
+    }
 
-  .system {
-    font-style: italic;
-  }
+    #chat .system {
+      background: #330000;
+      color: #ff4d4d;
+      font-weight: bold;
+      text-align: center;
+      max-width: 90%;
+      margin: 0 auto;
+    }
 
-  .system.ban { color: #ff5555; }      /* Red for ban */
-  .system.unban { color: #50fa7b; }   /* Green for unban */
+    #chat .username {
+      font-weight: bold;
+      color: #b566ff;
+      cursor: pointer;
+      margin-right: 5px;
+    }
 
-  #input-container {
-    display: flex;
-    padding: 10px;
-    border-top: 1px solid #333;
-    background-color: #1a1a1a;
-  }
+    #chat .mention {
+      background: #333300;
+      color: #ffff00;
+      font-weight: bold;
+    }
 
-  #message-input {
-    flex: 1;
-    padding: 10px;
-    border-radius: 5px;
-    border: none;
-    outline: none;
-    font-size: 16px;
-    background-color: #333;
-    color: white;
-  }
+    #messageForm {
+      display: flex;
+      width: 100%;
+      padding: 15px;
+      background: #111;
+      border-top: 1px solid #333;
+      gap: 10px;
+    }
 
-  #send-btn {
-    padding: 10px 15px;
-    margin-left: 10px;
-    border: none;
-    border-radius: 5px;
-    background-color: #bb86fc;
-    color: #0d0d0d;
-    font-weight: bold;
-    cursor: pointer;
-  }
+    #messageForm input {
+      flex: 1;
+      padding: 12px 15px;
+      border-radius: 25px;
+      border: none;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 16px;
+    }
 
-  #send-btn:hover {
-    background-color: #9b5de5;
-  }
-</style>
+    #messageForm input::placeholder { color: #888; }
+
+    #messageForm button {
+      padding: 12px 25px;
+      border-radius: 25px;
+      border: none;
+      background: #b566ff;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    #messageForm button:hover { background: #9b40ff; }
+
+    #chat::-webkit-scrollbar { width: 10px; }
+    #chat::-webkit-scrollbar-thumb { background: #555; border-radius: 5px; }
+    #chat::-webkit-scrollbar-track { background: #0d0d0d; }
+  </style>
 </head>
 <body>
+  <div id="chat"></div>
+  <form id="messageForm">
+    <input id="messageInput" autocomplete="off" placeholder="Type a message..." />
+    <button>Send</button>
+  </form>
 
-<div id="chat-container"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
 
-<div id="input-container">
-  <input id="message-input" type="text" placeholder="Type your message..." autocomplete="off">
-  <button id="send-btn">Send</button>
-</div>
+    let params = new URLSearchParams(window.location.search);
+let ignore = params.has("_sm_au_"); // just detect the weird param
+if (ignore) {
+  history.replaceState(null, "", window.location.pathname); // removes query string
+}
 
-<script src="/socket.io/socket.io.js"></script>
-<script>
-  const socket = io();
 
-  let cookieId = localStorage.getItem("chatCookieId");
-  let username = prompt("Enter your username:") || "Anonymous";
+    let username = localStorage.getItem("username");
+    let userId = localStorage.getItem("userid");
 
-  // Send username & cookie
-  socket.emit("set username", { username, cookieId });
-
-  // Save cookie from server
-  socket.on("setCookie", (id) => {
-    localStorage.setItem("chatCookieId", id);
-    cookieId = id;
-  });
-
-  const chat = document.getElementById("chat-container");
-  const input = document.getElementById("message-input");
-  const sendBtn = document.getElementById("send-btn");
-
-  function addMessage(msg) {
-    const div = document.createElement("div");
-    div.classList.add("message");
-
-    if (msg.system) {
-      div.classList.add("system");
-      if (msg.message.toLowerCase().includes("unban")) div.classList.add("unban");
-      if (msg.message.toLowerCase().includes("ban")) div.classList.add("ban");
-      div.textContent = `${msg.username}: ${msg.message}`;
-    } else {
-      div.innerHTML = `<span class="username" data-id="${msg.userId}">${msg.username}</span>: ${msg.message}`;
+    if (!username) {
+      username = prompt("Enter your username:") || "Anonymous";
+      localStorage.setItem("username", username);
     }
 
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
-  }
+    socket.emit("set username", { username, cookieId: userId });
 
-  // Load chat history
-  socket.on("chat history", (history) => {
-    chat.innerHTML = "";
-    history.forEach(addMessage);
-  });
+    socket.on("setCookie", id => {
+      userId = id;
+      localStorage.setItem("userid", id);
+    });
 
-  socket.on("chat message", addMessage);
+    const chat = document.getElementById("chat");
+    const form = document.getElementById("messageForm");
+    const input = document.getElementById("messageInput");
 
-  sendBtn.onclick = () => {
-    const msg = input.value.trim();
-    if (!msg) return;
-    socket.emit("chat message", msg);
-    input.value = "";
-  };
+    // Load chat history
+    socket.on("chat history", msgs => msgs.forEach(addMessage));
+    socket.on("chat message", addMessage);
+    socket.on("bannedNotice", data => alert(data.text));
 
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") sendBtn.click();
-  });
+    // Mention notifications
+    socket.on("mention", data => {
+      if (Notification.permission === "granted") {
+        new Notification(`${data.from} mentioned you!`, { body: data.message });
+      }
+    });
 
-  // Show popup with user ID when clicking username
-  chat.addEventListener("click", (e) => {
-    if (e.target.classList.contains("username")) {
-      alert(`User ID: ${e.target.dataset.id}`);
+    function addMessage(msg) {
+      const div = document.createElement("div");
+
+      if (msg.system) {
+        div.classList.add("system");
+        div.textContent = msg.message;
+      } else {
+        const mention = msg.message.includes(`@${username}`);
+        if (mention) div.classList.add("mention");
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = msg.username;
+        nameSpan.classList.add("username");
+        nameSpan.onclick = () => alert(`User ID: ${msg.userId}`);
+        div.appendChild(nameSpan);
+        div.appendChild(document.createTextNode(`: ${msg.message}`));
+      }
+
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
     }
-  });
-</script>
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      if (!input.value) return;
+      socket.emit("chat message", input.value);
+      input.value = "";
+    });
+
+    // Request notification permission
+    if (Notification.permission === "default") Notification.requestPermission();
+  </script>
 </body>
 </html>
